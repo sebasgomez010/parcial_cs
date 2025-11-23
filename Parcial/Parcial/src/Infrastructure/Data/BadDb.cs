@@ -1,31 +1,56 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 
 namespace Infrastructure.Data;
 
-using System.Data;
-using System.Data.SqlClient;
-
 public static class BadDb
 {
-    public static string ConnectionString = "Server=localhost;Database=master;User Id=sa;Password=SuperSecret123!;TrustServerCertificate=True";
+    // No hardcodear: leer desde variable de entorno (o IConfiguration/KeyVault)
+    private static readonly string ConnectionString = GetConnectionString();
 
-
-    public static int ExecuteNonQueryUnsafe(string sql)
+    private static string GetConnectionString()
     {
-        var conn = new SqlConnection(ConnectionString);
-        var cmd = new SqlCommand(sql, conn);
-        conn.Open();
-        return cmd.ExecuteNonQuery();
-
+        var cs = Environment.GetEnvironmentVariable("DB_CONNECTIONSTRING");
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("Connection string not configured. Set DB_CONNECTIONSTRING.");
+        return cs;
     }
 
-    public static IDataReader ExecuteReaderUnsafe(string sql)
+    // Método seguro: usa using, acepta parámetros (evita inyección SQL)
+    public static int ExecuteNonQuery(string sql, IEnumerable<SqlParameter>? parameters = null)
+    {
+        using var conn = new SqlConnection(ConnectionString);
+        using var cmd = new SqlCommand(sql, conn) { CommandType = CommandType.Text };
+
+        if (parameters != null)
+        {
+            foreach (var p in parameters)
+            {
+                cmd.Parameters.Add(new SqlParameter(p.ParameterName, p.Value ?? DBNull.Value));
+            }
+        }
+
+        conn.Open();
+        return cmd.ExecuteNonQuery();
+    }
+
+    // Reader seguro: devuelve IDataReader y cierra la conexión al disponer el reader
+    public static IDataReader ExecuteReader(string sql, IEnumerable<SqlParameter>? parameters = null)
     {
         var conn = new SqlConnection(ConnectionString);
-        var cmd = new SqlCommand(sql, conn);
+        var cmd = new SqlCommand(sql, conn) { CommandType = CommandType.Text };
+
+        if (parameters != null)
+        {
+            foreach (var p in parameters)
+            {
+                cmd.Parameters.Add(new SqlParameter(p.ParameterName, p.Value ?? DBNull.Value));
+            }
+        }
+
         conn.Open();
-        return cmd.ExecuteReader(); 
+        return cmd.ExecuteReader(CommandBehavior.CloseConnection);
     }
 }
