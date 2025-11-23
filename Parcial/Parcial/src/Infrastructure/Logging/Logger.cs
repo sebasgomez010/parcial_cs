@@ -13,7 +13,14 @@ public static class Logger
     }
 
     public static void Try(Action a)
+{
+    try
     {
-        try { a(); } catch { }
+        a();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("[ERROR] " + DateTime.Now + " - " + ex.Message);
     }
 }
+
