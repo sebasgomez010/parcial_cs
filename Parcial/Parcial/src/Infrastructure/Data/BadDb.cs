@@ -18,6 +18,7 @@ public static class BadDb
         var cmd = new SqlCommand(sql, conn);
         conn.Open();
         return cmd.ExecuteNonQuery();
+
     }
 
     public static IDataReader ExecuteReaderUnsafe(string sql)
@@ -26,4 +27,5 @@ public static class BadDb
         var cmd = new SqlCommand(sql, conn);
         conn.Open();
         return cmd.ExecuteReader(); 
+    }
 }
