@@ -22,9 +22,13 @@ if (!string.IsNullOrWhiteSpace(cs))
         var tempLogger = loggerFactory.CreateLogger("Startup");
         tempLogger.LogInformation("Database connection configured: {cs}", masked);
     }
-    catch
-    {
-    }
+    catch (Exception ex)
+{
+    builder.Logging.AddConsole();
+    builder.Logging.CreateLogger("Startup")
+        .LogWarning(ex, "Could not mask connection string safely.");
+}
+
 }
 else
 {
@@ -89,25 +93,30 @@ app.MapGet("/", () => Results.Ok(new {
     endpoints = new[] { "/health", "/info", "/orders", "/orders/last" }
 }));
 
-app.Run();
+await app.RunAsync();
 
-
-public record CreateOrderDto(string Customer, string Product, int Qty, decimal Price);
-
-public static class ConnectionStringHelper
+namespace WebApi.Contracts
 {
-    public static string MaskConnectionString(string cs)
+    public record CreateOrderDto(string Customer, string Product, int Qty, decimal Price);
+}
+
+namespace WebApi.Utilities
+{
+    public static class ConnectionStringHelper
     {
-        try
+        public static string MaskConnectionString(string cs)
         {
-            var builder = new SqlConnectionStringBuilder(cs);
-            if (!string.IsNullOrEmpty(builder.Password))
-                builder.Password = "****";
-            return builder.ToString();
-        }
-        catch
-        {
-            return "ConnectionString(****)";
+            try
+            {
+                var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(cs);
+                if (!string.IsNullOrEmpty(builder.Password))
+                    builder.Password = "****";
+                return builder.ToString();
+            }
+            catch
+            {
+                return "ConnectionString(****)";
+            }
         }
     }
 }
