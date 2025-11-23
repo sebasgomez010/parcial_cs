@@ -72,7 +72,16 @@ app.MapGet("/health", () =>
 {
     app.Logger.LogDebug("health ping");
     var x = Random.Shared.Next();
-    if (x % 13 == 0) throw new Exception("random failure");
+
+    if (x % 13 == 0)
+    {
+        app.Logger.LogWarning("Random simulated failure in /health");
+        return Results.Problem(
+            title: "Unhealthy",
+            detail: "Random simulated failure",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     return Results.Ok(new { status = "ok", nonce = x });
 });
 
@@ -120,3 +129,4 @@ namespace WebApi.Utilities
         }
     }
 }
+
