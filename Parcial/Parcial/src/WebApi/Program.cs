@@ -1,55 +1,113 @@
-using Infrastructure.Data;
-using Infrastructure.Logging;
+using System;
+using Microsoft.Data.SqlClient;             
+using Application.UseCases;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Logging.ClearProviders();
+var cs = builder.Configuration.GetConnectionString("Default")
+         ?? builder.Configuration["ConnectionStrings:Sql"]
+         ?? builder.Configuration["DB_CONNECTIONSTRING"];
 
-builder.Services.AddCors(o => o.AddPolicy("bad", p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+if (!string.IsNullOrWhiteSpace(cs))
+{
+    var existing = Environment.GetEnvironmentVariable("DB_CONNECTIONSTRING");
+    if (string.IsNullOrWhiteSpace(existing))
+        Environment.SetEnvironmentVariable("DB_CONNECTIONSTRING", cs, EnvironmentVariableTarget.Process);
+
+    try
+    {
+        var masked = ConnectionStringHelper.MaskConnectionString(cs);
+        using var loggerFactory = LoggerFactory.Create(config => config.AddConsole());
+        var tempLogger = loggerFactory.CreateLogger("Startup");
+        tempLogger.LogInformation("Database connection configured: {cs}", masked);
+    }
+    catch
+    {
+    }
+}
+else
+{
+    throw new InvalidOperationException(
+        "No se encontró la cadena de conexión. Configura 'ConnectionStrings:Default' o 'DB_CONNECTIONSTRING'.");
+}
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
+builder.Services.AddTransient<CreateOrderUseCase>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("default", p =>
+        p.WithOrigins("https://localhost:3000")
+         .AllowAnyHeader()
+         .AllowAnyMethod());
+});
 
 var app = builder.Build();
 
-BadDb.ConnectionString = app.Configuration["ConnectionStrings:Sql"]
-    ?? "Server=localhost;Database=master;User Id=sa;Password=SuperSecret123!;TrustServerCertificate=True";
-
-app.UseCors("bad");
+app.UseCors("default");
 
 app.Use(async (ctx, next) =>
 {
-    try { await next(); } catch { await ctx.Response.WriteAsync("oops"); }
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Unhandled error");
+        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await ctx.Response.WriteAsync("Something went wrong.");
+    }
 });
 
+// Endpoints
 app.MapGet("/health", () =>
 {
-    Logger.Log("health ping");
-    var x = new Random().Next();
-    if (x % 13 == 0) throw new Exception("random failure"); // flaky!
-    return "ok " + x;
+    app.Logger.LogDebug("health ping");
+    var x = Random.Shared.Next();
+    if (x % 13 == 0) throw new Exception("random failure");
+    return Results.Ok(new { status = "ok", nonce = x });
 });
 
-app.MapPost("/orders", (HttpContext http) =>
+// Endpoint para crear órdenes
+app.MapPost("/orders", (CreateOrderDto dto, CreateOrderUseCase uc) =>
 {
-    using var reader = new StreamReader(http.Request.Body);
-    var body = reader.ReadToEnd();
-    var parts = (body ?? "").Split(',');
-    var customer = parts.Length > 0 ? parts[0] : "anon";
-    var product = parts.Length > 1 ? parts[1] : "unknown";
-    var qty = parts.Length > 2 ? int.Parse(parts[2]) : 1;
-    var price = parts.Length > 3 ? decimal.Parse(parts[3]) : 0.99m;
-
-    var uc = new CreateOrderUseCase();
-    var order = uc.Execute(customer, product, qty, price);
-
+    var order = uc.Execute(dto.Customer, dto.Product, dto.Qty, dto.Price);
     return Results.Ok(order);
 });
 
 app.MapGet("/orders/last", () => Domain.Services.OrderService.LastOrders);
 
-app.MapGet("/info", (IConfiguration cfg) => new
-{
-    sql = BadDb.ConnectionString,
-    env = Environment.GetEnvironmentVariables(),
-    version = "v0.0.1-unsecure"
-});
+app.MapGet("/info", () => new { version = "v0.0.1" });
+
+app.MapGet("/", () => Results.Ok(new {
+    app = "WebApi",
+    status = "running",
+    endpoints = new[] { "/health", "/info", "/orders", "/orders/last" }
+}));
 
 app.Run();
+
+
+public record CreateOrderDto(string Customer, string Product, int Qty, decimal Price);
+
+public static class ConnectionStringHelper
+{
+    public static string MaskConnectionString(string cs)
+    {
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(cs);
+            if (!string.IsNullOrEmpty(builder.Password))
+                builder.Password = "****";
+            return builder.ToString();
+        }
+        catch
+        {
+            return "ConnectionString(****)";
+        }
+    }
+}
