@@ -4,7 +4,7 @@ namespace Infrastructure.Logging;
 
 public static class Logger
 {
-    public static bool Enabled = true;
+    private static readonly bool Enabled = true; // solo lectura
 
     public static void Log(string message)
     {
