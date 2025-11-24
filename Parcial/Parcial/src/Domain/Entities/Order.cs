@@ -8,8 +8,8 @@ public class Order
     private int Id;
     private string CustomerName;
     private string ProductName;
-    private int Quantity;
-    private decimal UnitPrice;
+    // private int Quantity;
+    // private decimal UnitPrice;
 
     public void CalculateTotalAndLog()
     {
