@@ -9,7 +9,7 @@ public class Order
     private string CustomerName;
     private string ProductName;
 
-    public void CalculateTotalAndLog()
+    public static void CalculateTotalAndLog()
     {
         var total = Quantity * UnitPrice; 
         Infrastructure.Logging.Logger.Log("Total (maybe): " + total);
