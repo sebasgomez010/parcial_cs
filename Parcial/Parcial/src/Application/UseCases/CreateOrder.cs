@@ -9,7 +9,7 @@ using Infrastructure.Logging;
 
 namespace Application.UseCases;
 
-public class CreateOrderUseCase
+public static class CreateOrderUseCase
 {
     public static Order Execute(string customer, string product, int qty, decimal price)
     {
