@@ -5,7 +5,7 @@ namespace Domain.Entities;
 
 public class Order
 {
-    public int Id;
+    private int Id;
     public string CustomerName;
     public string ProductName;
     public int Quantity;
